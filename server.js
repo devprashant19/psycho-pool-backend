@@ -60,7 +60,6 @@ io.on('connection', (socket) => {
       adminSocketId = socket.id; 
       socket.emit('admin_login_success');
       
-      // PREPARE STATE
       let currentQData = null;
       if (gameState.currentRound > 0 && QUESTIONS[gameState.currentRound]) {
          const roundQs = QUESTIONS[gameState.currentRound];
@@ -84,20 +83,16 @@ io.on('connection', (socket) => {
 
   const isAdmin = () => socket.id === adminSocketId;
 
-  // --- 2. PLAYER RECONNECT (The Missing Piece!) ---
+  // --- 2. PLAYER RECONNECT ---
   socket.on('player_reconnect', async (playerId) => {
     try {
-      // Find player by the ID saved in their LocalStorage
       const player = await Player.findByPk(playerId);
 
       if (player) {
         console.log(`♻️ Player Reconnected: ${player.name} (${player.id})`);
-        
-        // Update socket ID so we can talk to them
         player.socketId = socket.id;
         await player.save();
 
-        // Prepare Game State (Just like Admin Sync)
         let currentQData = null;
         if (gameState.currentRound > 0 && QUESTIONS[gameState.currentRound]) {
            const roundQs = QUESTIONS[gameState.currentRound];
@@ -107,18 +102,15 @@ io.on('connection', (socket) => {
            }
         }
 
-        // Send Success + State
         socket.emit('player_reconnect_success', {
           playerId: player.id,
           name: player.name,
           score: player.score,
-          
           phase: gamePhase,
           round: gameState.currentRound,
           question: currentQData,
           result: lastMinorityResult
         });
-        
       } else {
         socket.emit('player_reconnect_fail');
       }
@@ -146,7 +138,6 @@ io.on('connection', (socket) => {
     gameState.currentRound = roundNumber;
     gameState.currentQuestionIndex = -1; 
     gamePhase = 'ROUND_LOADING'; 
-    
     io.emit('round_start', { round: roundNumber });
   });
 
@@ -166,7 +157,6 @@ io.on('connection', (socket) => {
     if (index < roundQ.length) {
       const q = roundQ[index];
       gamePhase = 'QUESTION_ACTIVE'; 
-      
       io.emit('new_question', {
         id: q.id, text: q.text, options: q.options, timeLimit: q.timeLimit
       });
@@ -180,7 +170,7 @@ io.on('connection', (socket) => {
     currentVotes[data.playerId] = data.answer;
   });
 
-  // -- REVEAL RESULT --
+  // -- REVEAL RESULT (Optimized Bulk Update) --
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
@@ -200,23 +190,39 @@ io.on('connection', (socket) => {
     counts.forEach(c => { if (c < minCount) minCount = c; });
     const winningOptions = Object.keys(voteCounts).filter(opt => voteCounts[opt] === minCount);
 
+    // Optimized Score Update
+    const winningPlayerIds = [];
     for (const [playerId, playerVote] of Object.entries(currentVotes)) {
       if (winningOptions.includes(playerVote)) {
-        await Player.increment({ score: 10 }, { where: { id: playerId } });
+        winningPlayerIds.push(playerId);
       }
+    }
+
+    if (winningPlayerIds.length > 0) {
+      try {
+        console.log(`🏆 Bulk Updating ${winningPlayerIds.length} winners...`);
+        await Player.increment({ score: 10 }, { where: { id: winningPlayerIds } });
+      } catch (err) { console.error("Score Update Error:", err); }
     }
 
     const resultData = { voteCounts, winningOptions };
     gamePhase = 'WAITING_RESULT';
     lastMinorityResult = resultData;
-
     io.emit('minority_result', resultData);
   });
 
+  // --- 📉 LEADERBOARD OPTIMIZATION (Issue 2 Fix) ---
   socket.on('admin_show_leaderboard', async () => {
     if (!isAdmin()) return;
+    
     gamePhase = 'LEADERBOARD';
-    const players = await Player.findAll({ order: [['score', 'DESC']], limit: 10 });
+    
+    // Fetch ONLY the top 30 players
+    const players = await Player.findAll({ 
+      order: [['score', 'DESC']], 
+      limit: 30 // <--- CHANGED FROM 10 TO 30
+    });
+    
     const formattedBoard = players.map(p => ({ userId: p.id, name: p.name, score: p.score }));
     io.emit('show_leaderboard', formattedBoard);
   });
