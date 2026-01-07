@@ -1,11 +1,19 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-// Determine if we are in Production (using a cloud URL)
-const isProduction = !!process.env.DATABASE_URL;
+// 1. Get the Database URL from Environment
+const dbUrl = process.env.DATABASE_URL;
 
-const sequelize = new Sequelize(process.env.DATABASE_URL || 'postgres://postgres:password@localhost:5432/quizgame', {
-  dialect: 'postgres', // Explicitly state the dialect
+// 2. Define if we are in Production
+const isProduction = !!dbUrl; 
+
+// 3. Fallback for Local Development ONLY
+// If we are on Render (Production) but dbUrl is missing, this usually breaks.
+// But we'll let it try to connect or fail clearly.
+const connectionString = dbUrl || 'postgresql://postgres:$#@!ManaviSharma1234@db.algailnlyceqsjyfqytq.supabase.co:5432/postgres';
+
+const sequelize = new Sequelize(connectionString, {
+  dialect: 'postgres',
   logging: false,
   pool: {
     max: 10,
@@ -16,15 +24,15 @@ const sequelize = new Sequelize(process.env.DATABASE_URL || 'postgres://postgres
   dialectOptions: isProduction ? {
     ssl: {
       require: true,
-      rejectUnauthorized: false // Required for Supabase to accept the connection
+      rejectUnauthorized: false // ✅ Crucial for Supabase
     }
-  } : {}
+  } : {} // ✅ Empty for Localhost
 });
 
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ PostgreSQL Connected');
+    console.log(isProduction ? '✅ Cloud Database Connected' : '✅ Local Database Connected');
     await sequelize.sync(); 
     console.log('✅ Tables Synced');
   } catch (error) {
