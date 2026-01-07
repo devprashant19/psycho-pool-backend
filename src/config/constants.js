@@ -4,8 +4,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 const QUESTIONS = {
   1: [
-    { id: 'q1', text: "Vote for the LEAST popular color:", options: ["Red", "Blue", "Green", "Yellow"], timeLimit: 20 },
-    { id: 'q2', text: "Which number will be picked the least?", options: ["1", "2", "3", "4"], timeLimit: 20 },
+    { id: 'q1', text: "VOTE for least interesting senior", options: ["Ujjwal Sir", "Soham Sir", "Manavi Mam", "Raman SIR"], timeLimit: 20 },
+    { id: 'q2', text: "Sbse bekar event name?", options: ["Genesis", "Inteham-E-GDG", "Nexus", "Genocide"], timeLimit: 20 },
   ],
   2: [
     { id: 'q3', text: "Who is the Impostor?", options: ["Player A", "Player B", "Player C", "Player D"], timeLimit: 20 },
