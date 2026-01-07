@@ -8,12 +8,12 @@ const QUESTIONS = {
     { id: 'q2', text: "Sbse bekar event name?", options: ["Genesis", "Inteham-E-GDG", "Nexus", "Genocide"], timeLimit: 20 },
   ],
   2: [
-    { id: 'q3', text: "Who is the Impostor?", options: ["Player A", "Player B", "Player C", "Player D"], timeLimit: 20 },
-    { id: 'q4', text: "Pick the minority food:", options: ["Pizza", "Burger", "Sushi", "Salad"], timeLimit: 20 },
+    { id: 'q3', text: "Most overrated club?", options: ["Rhythmeekz", "Pravah", "Music club", "Dravida "], timeLimit: 20 },
+    { id: 'q4', text: "Club meetings usually result in?", options: ["Planning ", "Execution ", "Confusion ", "“Next meet mein decide karenge”"], timeLimit: 20 },
   ],
   3: [
-    { id: 'q5', text: "Which season is the least liked?", options: ["Spring", "Summer", "Autumn", "Winter"], timeLimit: 15 },
-    { id: 'q6', text: "Least popular pet?", options: ["Cat", "Dog", "Bird", "Fish"], timeLimit: 15 },
+    { id: 'q5', text: "College clubs ka real output?", options: ["Skills ", "Exposure ", "Certificates ", "Instagram posts"], timeLimit: 15 },
+    { id: 'q6', text: "5 baje class khatam hone ke baad hostel bhaagne ki speed?", options: ["Normal walk", "Yr club ki extension", "Usain Bolt", "Jail break wali feeling"], timeLimit: 15 },
   ],
   4: [
     { id: 'q7', text: "Minority Strategy: Go High or Low?", options: ["High", "Low", "Middle", "None"], timeLimit: 15 },
