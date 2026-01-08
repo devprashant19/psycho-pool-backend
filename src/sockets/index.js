@@ -19,4 +19,7 @@ module.exports = (io) => {
       }
     });
   });
+  setInterval(() => {
+    io.emit('player_count_update', io.engine.clientsCount);
+  }, 5000);
 };

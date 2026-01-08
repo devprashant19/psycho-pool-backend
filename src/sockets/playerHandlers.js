@@ -10,7 +10,7 @@ module.exports = (io, socket) => {
       const { name } = data;
       const newPlayer = await Player.create({ name, score: 0, socketId: socket.id, history: [] });
       socket.emit("join_success", { playerId: newPlayer.id });
-      io.emit("player_count_update", io.engine.clientsCount);
+      // io.emit("player_count_update", io.engine.clientsCount);
     } catch (err) { console.error(err); }
   });
 
