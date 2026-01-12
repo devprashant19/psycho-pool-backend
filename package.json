@@ -3,10 +3,30 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "faker": "^6.6.6",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3"
-  }
+  },
+  "name": "quiz-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devprashant19/psycho-pool-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/devprashant19/psycho-pool-backend/issues"
+  },
+  "homepage": "https://github.com/devprashant19/psycho-pool-backend#readme",
+  "description": ""
 }

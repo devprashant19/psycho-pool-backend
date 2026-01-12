@@ -15,7 +15,10 @@ const server = http.createServer(app);
 
 // Socket Setup
 const io = new Server(server, { 
-  cors: { origin: "*" } 
+  cors: {
+    origin: "*", 
+    methods: ["GET", "POST"]
+  } 
 });
 
 // Initialize Systems

@@ -7,7 +7,7 @@ module.exports = (io, socket) => {
 
   const isAdmin = () => socket.id === state.adminSocketId;
 
-  // --- 1. TOGGLE MODE (NEW) ---
+  // --- 1. TOGGLE MODE ---
   socket.on('admin_toggle_mode', () => {
     if (!isAdmin()) return;
     
@@ -41,7 +41,7 @@ module.exports = (io, socket) => {
         round: state.gameState.currentRound,
         question: currentQData,
         result: state.lastMinorityResult,
-        winningMode: state.winningMode // 👈 Sync the button state on login
+        winningMode: state.winningMode 
       });
     } else {
       socket.emit('admin_login_fail');
@@ -74,7 +74,11 @@ module.exports = (io, socket) => {
       const q = roundQ[state.gameState.currentQuestionIndex];
       state.gamePhase = 'QUESTION_ACTIVE'; 
       io.emit('new_question', {
-        id: q.id, text: q.text, options: q.options, timeLimit: q.timeLimit
+        id: q.id, 
+        text: q.text, 
+        options: q.options, 
+        timeLimit: q.timeLimit,
+        mode: state.winningMode // 👈 ADD THIS LINE
       });
     } else {
       state.gamePhase = 'LOBBY'; 
@@ -82,7 +86,7 @@ module.exports = (io, socket) => {
     }
   });
 
-  // --- REVEAL RESULT (UPDATED) ---
+  // --- REVEAL RESULT ---
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
@@ -98,13 +102,11 @@ module.exports = (io, socket) => {
       return;
     }
 
-    // 👇 CORE LOGIC CHANGE: Check the mode before calculating winners
+    // Check mode
     let targetCount;
     if (state.winningMode === 'MAJORITY') {
-       // "ON": Most votes win
        targetCount = Math.max(...counts);
     } else {
-       // "OFF": Least votes win (Default)
        targetCount = Math.min(...counts);
     }
 
@@ -126,24 +128,49 @@ module.exports = (io, socket) => {
       } catch (err) { console.error("Score Update Error:", err); }
     }
 
-    // Include the mode in the result so frontend can display "Minority Won" or "Majority Won"
     const resultData = { voteCounts, winningOptions, mode: state.winningMode };
     state.gamePhase = 'WAITING_RESULT';
     state.lastMinorityResult = resultData;
     io.emit('minority_result', resultData);
   });
 
-  // --- LEADERBOARD & RESET ---
+  // --- LEADERBOARD (UPDATED) ---
   socket.on('admin_show_leaderboard', async () => {
     if (!isAdmin()) return;
     state.gamePhase = 'LEADERBOARD';
     
+    // 1. Fetch Top 30 Players
     const players = await Player.findAll({ 
       order: [['score', 'DESC']], 
       limit: 30 
     });
     
-    const formattedBoard = players.map(p => ({ userId: p.id, name: p.name, score: p.score }));
+    // 2. Calculate Ranks with Logic (1st, 1st, 3rd...)
+    const formattedBoard = [];
+    
+    for (let i = 0; i < players.length; i++) {
+      let rank;
+      
+      if (i === 0) {
+        rank = 1;
+      } else {
+        // If score is same as previous player, share rank
+        if (players[i].score === players[i - 1].score) {
+          rank = formattedBoard[i - 1].rank;
+        } else {
+          // Otherwise, rank is actual position (i + 1)
+          rank = i + 1;
+        }
+      }
+
+      formattedBoard.push({ 
+        userId: players[i].id, 
+        name: players[i].name, 
+        score: players[i].score, 
+        rank: rank // 👈 Added Rank
+      });
+    }
+    
     io.emit('show_leaderboard', formattedBoard);
   });
 
