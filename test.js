@@ -4,8 +4,8 @@ const { io } = require("socket.io-client");
 // ⚠️ START WITH LOCALHOST FIRST to make sure the script works!
 const URL = "https://psycho-pool-backend.onrender.com"; 
 
-const MAX_CLIENTS = 200;
-const CLIENT_CREATION_INTERVAL = 250; // Add a bot every 50ms (prevents crashing your own PC)
+const MAX_CLIENTS = 500;
+const CLIENT_CREATION_INTERVAL = 50; // Add a bot every 50ms (prevents crashing your own PC)
 
 let clientCount = 0;
 

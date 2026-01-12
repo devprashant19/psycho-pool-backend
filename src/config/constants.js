@@ -6,7 +6,7 @@ const QUESTIONS = {
   1: [
     { id: 'q1', text: "VOTE for least interesting senior", options: ["Ujjwal Sir", "Soham Sir", "Manavi Mam", "Raman SIR"], timeLimit: 20 },
     { id: 'q2', text: "Sbse bekar event name?", options: ["Genesis", "Inteham-E-GDG", "Nexus", "Genocide"], timeLimit: 20 },
-  ],
+    ],
   2: [
     { id: 'q3', text: "Most overrated club?", options: ["Rhythmeekz", "Pravah", "Music club", "Dravida "], timeLimit: 20 },
     { id: 'q4', text: "Club meetings usually result in?", options: ["Planning ", "Execution ", "Confusion ", "“Next meet mein decide karenge”"], timeLimit: 20 },

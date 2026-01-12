@@ -7,6 +7,19 @@ module.exports = (io, socket) => {
 
   const isAdmin = () => socket.id === state.adminSocketId;
 
+  // --- 1. TOGGLE MODE (NEW) ---
+  socket.on('admin_toggle_mode', () => {
+    if (!isAdmin()) return;
+    
+    // Switch between MINORITY and MAJORITY
+    state.winningMode = state.winningMode === 'MINORITY' ? 'MAJORITY' : 'MINORITY';
+    
+    console.log(`🔄 Mode Switched to: ${state.winningMode}`);
+    
+    // Tell the Admin UI to update the button color/text
+    socket.emit('admin_mode_update', state.winningMode);
+  });
+
   // --- LOGIN ---
   socket.on('admin_login', (password) => {
     if (password === ADMIN_PASSWORD) {
@@ -27,7 +40,8 @@ module.exports = (io, socket) => {
         phase: state.gamePhase,
         round: state.gameState.currentRound,
         question: currentQData,
-        result: state.lastMinorityResult
+        result: state.lastMinorityResult,
+        winningMode: state.winningMode // 👈 Sync the button state on login
       });
     } else {
       socket.emit('admin_login_fail');
@@ -68,7 +82,7 @@ module.exports = (io, socket) => {
     }
   });
 
-  // --- REVEAL RESULT ---
+  // --- REVEAL RESULT (UPDATED) ---
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
@@ -77,7 +91,6 @@ module.exports = (io, socket) => {
       voteCounts[vote] = (voteCounts[vote] || 0) + 1;
     });
 
-    let minCount = Infinity;
     const counts = Object.values(voteCounts);
     
     if (counts.length === 0) {
@@ -85,8 +98,17 @@ module.exports = (io, socket) => {
       return;
     }
 
-    counts.forEach(c => { if (c < minCount) minCount = c; });
-    const winningOptions = Object.keys(voteCounts).filter(opt => voteCounts[opt] === minCount);
+    // 👇 CORE LOGIC CHANGE: Check the mode before calculating winners
+    let targetCount;
+    if (state.winningMode === 'MAJORITY') {
+       // "ON": Most votes win
+       targetCount = Math.max(...counts);
+    } else {
+       // "OFF": Least votes win (Default)
+       targetCount = Math.min(...counts);
+    }
+
+    const winningOptions = Object.keys(voteCounts).filter(opt => voteCounts[opt] === targetCount);
 
     // Calculate Winners
     const winningPlayerIds = [];
@@ -99,12 +121,13 @@ module.exports = (io, socket) => {
     // Bulk Update DB
     if (winningPlayerIds.length > 0) {
       try {
-        console.log(`🏆 Bulk Updating ${winningPlayerIds.length} winners...`);
+        console.log(`🏆 Bulk Updating ${winningPlayerIds.length} winners (${state.winningMode} Mode)...`);
         await Player.increment({ score: 10 }, { where: { id: winningPlayerIds } });
       } catch (err) { console.error("Score Update Error:", err); }
     }
 
-    const resultData = { voteCounts, winningOptions };
+    // Include the mode in the result so frontend can display "Minority Won" or "Majority Won"
+    const resultData = { voteCounts, winningOptions, mode: state.winningMode };
     state.gamePhase = 'WAITING_RESULT';
     state.lastMinorityResult = resultData;
     io.emit('minority_result', resultData);

@@ -7,7 +7,11 @@ const state = {
   gamePhase: 'LOBBY',
   lastMinorityResult: null,
   currentVotes: {}, // Map: { playerId: answer }
-  adminSocketId: null
+  adminSocketId: null,
+
+  // 👇 NEW: Default to 'MINORITY' (Least votes wins)
+  // This changes when you click the toggle button in Admin Panel.
+  winningMode: 'MINORITY' 
 };
 
 module.exports = state;
