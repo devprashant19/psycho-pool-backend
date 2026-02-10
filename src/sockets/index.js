@@ -19,7 +19,15 @@ module.exports = (io) => {
       }
     });
   });
-  setInterval(() => {
-    io.emit('player_count_update', io.engine.clientsCount);
+  setInterval(async () => {
+    try {
+      // Fetch all sockets across all nodes
+      const sockets = await io.fetchSockets();
+      const totalCount = sockets.length;
+      
+      io.emit('player_count_update', totalCount);
+    } catch (e) {
+      console.error("Error fetching player count:", e);
+    }
   }, 5000);
 };

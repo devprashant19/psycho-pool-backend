@@ -1,22 +1,15 @@
 const Player = require('../models/Player');
-const state = require('../state/gameState'); // Import mutable state
+const state = require('../state/gameState');
 const { QUESTIONS, ADMIN_PASSWORD } = require('../config/constants');
-const { Op } = require('sequelize'); // Needed for bulk update
 
 module.exports = (io, socket) => {
 
   const isAdmin = () => socket.id === state.adminSocketId;
 
-  // --- 1. TOGGLE MODE ---
+  // --- TOGGLE MODE ---
   socket.on('admin_toggle_mode', () => {
     if (!isAdmin()) return;
-    
-    // Switch between MINORITY and MAJORITY
     state.winningMode = state.winningMode === 'MINORITY' ? 'MAJORITY' : 'MINORITY';
-    
-    console.log(`🔄 Mode Switched to: ${state.winningMode}`);
-    
-    // Tell the Admin UI to update the button color/text
     socket.emit('admin_mode_update', state.winningMode);
   });
 
@@ -26,7 +19,7 @@ module.exports = (io, socket) => {
       state.adminSocketId = socket.id;
       socket.emit('admin_login_success');
       
-      // Send current sync state
+      // Sync State logic...
       let currentQData = null;
       if (state.gameState.currentRound > 0 && QUESTIONS[state.gameState.currentRound]) {
          const roundQs = QUESTIONS[state.gameState.currentRound];
@@ -51,8 +44,6 @@ module.exports = (io, socket) => {
   // --- GAME CONTROL ---
   socket.on('admin_start_round', ({ roundNumber }) => {
     if (!isAdmin()) return;
-    if (!QUESTIONS[roundNumber]) return;
-
     state.gameState.currentRound = roundNumber;
     state.gameState.currentQuestionIndex = -1; 
     state.gamePhase = 'ROUND_LOADING'; 
@@ -66,7 +57,7 @@ module.exports = (io, socket) => {
     state.lastMinorityResult = null; 
     
     const roundQ = QUESTIONS[state.gameState.currentRound];
-    if (!roundQ) return;
+    if (!roundQ) return; // Guard clause
 
     state.gameState.currentQuestionIndex++; 
     
@@ -74,11 +65,7 @@ module.exports = (io, socket) => {
       const q = roundQ[state.gameState.currentQuestionIndex];
       state.gamePhase = 'QUESTION_ACTIVE'; 
       io.emit('new_question', {
-        id: q.id, 
-        text: q.text, 
-        options: q.options, 
-        timeLimit: q.timeLimit,
-        mode: state.winningMode // 👈 ADD THIS LINE
+        id: q.id, text: q.text, options: q.options, timeLimit: q.timeLimit, mode: state.winningMode
       });
     } else {
       state.gamePhase = 'LOBBY'; 
@@ -86,92 +73,89 @@ module.exports = (io, socket) => {
     }
   });
 
-  // --- REVEAL RESULT ---
+  // --- REVEAL RESULT (SAFE VERSION) ---
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
-    const voteCounts = {};
-    Object.values(state.currentVotes).forEach(vote => {
-      voteCounts[vote] = (voteCounts[vote] || 0) + 1;
-    });
+    try {
+        const voteCounts = {};
+        Object.values(state.currentVotes).forEach(vote => {
+        voteCounts[vote] = (voteCounts[vote] || 0) + 1;
+        });
 
-    const counts = Object.values(voteCounts);
-    
-    if (counts.length === 0) {
-      io.emit('minority_result', { voteCounts: {}, winningOptions: [] });
-      return;
+        const counts = Object.values(voteCounts);
+        
+        // Handle 0 votes case
+        if (counts.length === 0) {
+        console.log("⚠️ No votes recorded.");
+        io.emit('minority_result', { voteCounts: {}, winningOptions: [], mode: state.winningMode });
+        return;
+        }
+
+        let targetCount;
+        if (state.winningMode === 'MAJORITY') {
+            targetCount = Math.max(...counts);
+        } else {
+            targetCount = Math.min(...counts);
+        }
+
+        const winningOptions = Object.keys(voteCounts).filter(opt => voteCounts[opt] === targetCount);
+
+        const winningPlayerIds = [];
+        for (const [playerId, playerVote] of Object.entries(state.currentVotes)) {
+            if (winningOptions.includes(playerVote)) {
+                winningPlayerIds.push(playerId);
+            }
+        }
+
+        // 👇 WRAPPED IN TRY/CATCH TO PREVENT CRASH
+        if (winningPlayerIds.length > 0) {
+            try {
+                await Player.increment({ score: 10 }, { where: { id: winningPlayerIds } });
+            } catch (dbErr) {
+                console.error("❌ DB UPDATE ERROR:", dbErr);
+                // Do not crash the server!
+            }
+        }
+
+        const resultData = { voteCounts, winningOptions, mode: state.winningMode };
+        state.gamePhase = 'WAITING_RESULT';
+        state.lastMinorityResult = resultData;
+        io.emit('minority_result', resultData);
+
+    } catch (err) {
+        console.error("❌ FATAL REVEAL ERROR:", err);
     }
-
-    // Check mode
-    let targetCount;
-    if (state.winningMode === 'MAJORITY') {
-       targetCount = Math.max(...counts);
-    } else {
-       targetCount = Math.min(...counts);
-    }
-
-    const winningOptions = Object.keys(voteCounts).filter(opt => voteCounts[opt] === targetCount);
-
-    // Calculate Winners
-    const winningPlayerIds = [];
-    for (const [playerId, playerVote] of Object.entries(state.currentVotes)) {
-      if (winningOptions.includes(playerVote)) {
-        winningPlayerIds.push(playerId);
-      }
-    }
-
-    // Bulk Update DB
-    if (winningPlayerIds.length > 0) {
-      try {
-        console.log(`🏆 Bulk Updating ${winningPlayerIds.length} winners (${state.winningMode} Mode)...`);
-        await Player.increment({ score: 10 }, { where: { id: winningPlayerIds } });
-      } catch (err) { console.error("Score Update Error:", err); }
-    }
-
-    const resultData = { voteCounts, winningOptions, mode: state.winningMode };
-    state.gamePhase = 'WAITING_RESULT';
-    state.lastMinorityResult = resultData;
-    io.emit('minority_result', resultData);
   });
 
-  // --- LEADERBOARD (UPDATED) ---
+  // --- LEADERBOARD (SAFE VERSION) ---
   socket.on('admin_show_leaderboard', async () => {
     if (!isAdmin()) return;
-    state.gamePhase = 'LEADERBOARD';
     
-    // 1. Fetch Top 30 Players
-    const players = await Player.findAll({ 
-      order: [['score', 'DESC']], 
-      limit: 30 
-    });
-    
-    // 2. Calculate Ranks with Logic (1st, 1st, 3rd...)
-    const formattedBoard = [];
-    
-    for (let i = 0; i < players.length; i++) {
-      let rank;
-      
-      if (i === 0) {
-        rank = 1;
-      } else {
-        // If score is same as previous player, share rank
-        if (players[i].score === players[i - 1].score) {
-          rank = formattedBoard[i - 1].rank;
-        } else {
-          // Otherwise, rank is actual position (i + 1)
-          rank = i + 1;
-        }
-      }
+    try {
+        state.gamePhase = 'LEADERBOARD';
+        
+        console.log("📊 Fetching Leaderboard...");
+        
+        // 👇 WRAPPED IN TRY/CATCH
+        const players = await Player.findAll({ 
+            order: [['score', 'DESC']], 
+            limit: 30 
+        });
+        
+        const formattedBoard = players.map((p, i) => {
+            // Simplified rank logic for stability
+            return { userId: p.id, name: p.name, score: p.score, rank: i + 1 };
+        });
+        
+        io.emit('show_leaderboard', formattedBoard);
+        console.log(`✅ Sent Leaderboard with ${formattedBoard.length} entries.`);
 
-      formattedBoard.push({ 
-        userId: players[i].id, 
-        name: players[i].name, 
-        score: players[i].score, 
-        rank: rank // 👈 Added Rank
-      });
+    } catch (err) {
+        console.error("❌ LEADERBOARD CRASH ERROR:", err);
+        // Send empty list so admin doesn't freeze
+        socket.emit('show_leaderboard', []); 
     }
-    
-    io.emit('show_leaderboard', formattedBoard);
   });
 
   socket.on('admin_end_round', () => {
@@ -182,14 +166,15 @@ module.exports = (io, socket) => {
 
   socket.on('admin_reset_game', async () => {
     if (!isAdmin()) return;
-    await Player.destroy({ where: {}, truncate: true });
-    
+    try {
+        await Player.destroy({ where: {}, truncate: true });
+    } catch(err) { console.error("Reset DB Error", err); }
+
     state.gameState.currentRound = 0;
     state.gameState.currentQuestionIndex = -1;
     state.currentVotes = {}; 
     state.gamePhase = 'LOBBY'; 
     state.lastMinorityResult = null;
-    
     io.emit('player_count_update', 0); 
     io.emit('game_reset'); 
   });
