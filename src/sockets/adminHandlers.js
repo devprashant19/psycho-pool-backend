@@ -6,20 +6,20 @@ module.exports = (io, socket) => {
 
   const isAdmin = () => socket.id === state.adminSocketId;
 
-  // --- TOGGLE MODE ---
+
   socket.on('admin_toggle_mode', () => {
     if (!isAdmin()) return;
     state.winningMode = state.winningMode === 'MINORITY' ? 'MAJORITY' : 'MINORITY';
     socket.emit('admin_mode_update', state.winningMode);
   });
 
-  // --- LOGIN ---
+
   socket.on('admin_login', (password) => {
     if (password === ADMIN_PASSWORD) {
       state.adminSocketId = socket.id;
       socket.emit('admin_login_success');
       
-      // Sync State logic...
+      // Sync State logic
       let currentQData = null;
       if (state.gameState.currentRound > 0 && QUESTIONS[state.gameState.currentRound]) {
          const roundQs = QUESTIONS[state.gameState.currentRound];
@@ -41,7 +41,7 @@ module.exports = (io, socket) => {
     }
   });
 
-  // --- GAME CONTROL ---
+
   socket.on('admin_start_round', ({ roundNumber }) => {
     if (!isAdmin()) return;
     state.gameState.currentRound = roundNumber;
@@ -57,7 +57,7 @@ module.exports = (io, socket) => {
     state.lastMinorityResult = null; 
     
     const roundQ = QUESTIONS[state.gameState.currentRound];
-    if (!roundQ) return; // Guard clause
+    if (!roundQ) return;
 
     state.gameState.currentQuestionIndex++; 
     
@@ -73,7 +73,7 @@ module.exports = (io, socket) => {
     }
   });
 
-  // --- REVEAL RESULT (SAFE VERSION) ---
+
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
@@ -113,14 +113,33 @@ module.exports = (io, socket) => {
             }
         }
 
-        // 👇 WRAPPED IN TRY/CATCH TO PREVENT CRASH
+
+
         if (winningPlayerIds.length > 0) {
             try {
                 await Player.increment({ score: 10 }, { where: { id: winningPlayerIds } });
             } catch (dbErr) {
                 console.error("❌ DB UPDATE ERROR:", dbErr);
-                // Do not crash the server!
             }
+        }
+
+
+        try {
+            for (const [pId, pVote] of Object.entries(state.currentVotes)) {
+                const isCorrect = winningOptions.includes(pVote);
+                const player = await Player.findByPk(pId);
+                if (player) {
+                    const newHistory = [...(player.history || []), {
+                        round: state.gameState.currentRound,
+                        questionIndex: state.gameState.currentQuestionIndex,
+                        answer: pVote,
+                        isCorrect
+                    }];
+                    await player.update({ history: newHistory });
+                }
+            }
+        } catch (histErr) {
+            console.error("❌ HISTORY UPDATE ERROR:", histErr);
         }
 
         const resultData = { voteCounts, winningOptions, mode: state.winningMode };
@@ -128,12 +147,28 @@ module.exports = (io, socket) => {
         state.lastMinorityResult = resultData;
         io.emit('minority_result', resultData);
 
+
+        
+
+        const allSockets = await io.fetchSockets();
+        allSockets.forEach(s => {
+            if (s.playerId && state.currentVotes[s.playerId]) {
+                const playerVote = state.currentVotes[s.playerId];
+                const isCorrect = winningOptions.includes(playerVote);
+                s.emit('answer_result', { 
+                    isCorrect, 
+                    winningOptions,
+                    scoreDelta: isCorrect ? 10 : 0 
+                });
+            }
+        });
+
     } catch (err) {
         console.error("❌ FATAL REVEAL ERROR:", err);
     }
   });
 
-  // --- LEADERBOARD (SAFE VERSION) ---
+
   socket.on('admin_show_leaderboard', async () => {
     if (!isAdmin()) return;
     
@@ -142,15 +177,18 @@ module.exports = (io, socket) => {
         
         console.log("📊 Fetching Leaderboard...");
         
-        // 👇 WRAPPED IN TRY/CATCH
+
         const players = await Player.findAll({ 
             order: [['score', 'DESC']], 
             limit: 30 
         });
         
+        let currentRank = 1;
         const formattedBoard = players.map((p, i) => {
-            // Simplified rank logic for stability
-            return { userId: p.id, name: p.name, score: p.score, rank: i + 1 };
+            if (i > 0 && p.score < players[i - 1].score) {
+                currentRank = i + 1;
+            }
+            return { userId: p.id, name: p.name, score: p.score, rank: currentRank };
         });
         
         io.emit('show_leaderboard', formattedBoard);

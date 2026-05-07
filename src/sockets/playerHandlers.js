@@ -2,16 +2,16 @@ const Player = require('../models/Player');
 const state = require('../state/gameState');
 const { QUESTIONS } = require('../config/constants');
 
-// 👇 1. GLOBAL QUEUE: Forces users to join single-file, not all at once.
+// GLOBAL QUEUE: Forces users to join single-file, not all at once.
 let joinQueue = Promise.resolve();
 
 module.exports = (io, socket) => {
   
-  // --- JOIN GAME (With Queue Protection) ---
+
   socket.on("join_game", (data) => {
     const { name } = data;
     
-    // 👇 2. Add this request to the end of the line
+
     joinQueue = joinQueue.then(async () => {
       try {
         console.log(`👤 Joining Queue: ${name} (${socket.id})`);
@@ -24,7 +24,7 @@ module.exports = (io, socket) => {
           return;
         }
 
-        // Database Call (Safe now because it's sequential)
+
         const newPlayer = await Player.create({ 
             name, 
             score: 0, 
@@ -36,10 +36,9 @@ module.exports = (io, socket) => {
 
         socket.emit("join_success", { playerId: newPlayer.id });
         
-        // Optional: Update count less frequently in index.js instead of here
-        // io.emit("player_count_update", io.engine.clientsCount);
 
-        // 👇 3. BREATHING ROOM: Wait 10ms before letting the next person in.
+
+
         await new Promise(r => setTimeout(r, 10));
 
       } catch (err) { 
@@ -49,19 +48,23 @@ module.exports = (io, socket) => {
     });
   });
 
-  // --- SUBMIT ANSWER ---
+
   socket.on('submit_answer', (data) => {
     if (!socket.playerId) {
       console.warn(`⚠️ Unauthenticated vote attempt from socket ${socket.id}`);
       return;
     }
     
-    // Voting is fast (Memory), so no queue needed here.
+
+    if (state.currentVotes[socket.playerId]) {
+      return;
+    }
+
     if (!state.currentVotes) state.currentVotes = {};
     state.currentVotes[socket.playerId] = data.answer;
   });
 
-  // --- RECONNECT ---
+
   socket.on('player_reconnect', async (playerId) => {
     try {
       const player = await Player.findByPk(playerId);

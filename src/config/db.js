@@ -11,9 +11,15 @@ if (isGCP) {
   console.log('☁️ Environment: Google Cloud Detected. Connecting via Socket...');
   
   sequelize = new Sequelize(
+<<<<<<< HEAD
     process.env.DB_NAME,
     process.env.DB_USER,
     process.env.DB_PASS,
+=======
+    process.env.DB_NAME,     // game_db
+    process.env.DB_USER,     // postgres
+    process.env.DB_PASS,     
+>>>>>>> fix/remove-secrets
     {
       dialect: 'postgres',
       host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
