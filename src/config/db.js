@@ -11,9 +11,9 @@ if (isGCP) {
   console.log('☁️ Environment: Google Cloud Detected. Connecting via Socket...');
   
   sequelize = new Sequelize(
-    process.env.DB_NAME,     // game_db
-    process.env.DB_USER,     // postgres
-    process.env.DB_PASS,     // Prashant1901Database
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASS,
     {
       dialect: 'postgres',
       host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
@@ -63,8 +63,6 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log(`✅ Database Connected successfully via ${isGCP ? 'Cloud Socket' : 'TCP'}.`);
 
-    // 👇 CRITICAL FIX: Run this in PRODUCTION too!
-    // This creates the 'Players' table if it is missing.
     await sequelize.sync({ alter: true }); 
     console.log('✅ Tables Synced and Ready.');
 
