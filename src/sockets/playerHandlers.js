@@ -16,6 +16,14 @@ module.exports = (io, socket) => {
       try {
         console.log(`👤 Joining Queue: ${name} (${socket.id})`);
 
+        // Check for duplicate name
+        const existingPlayer = await Player.findOne({ where: { name } });
+        if (existingPlayer) {
+          console.warn(`⚠️ Name already taken: ${name}`);
+          socket.emit("join_fail", { message: "This name is already taken. Please choose another." });
+          return;
+        }
+
         // Database Call (Safe now because it's sequential)
         const newPlayer = await Player.create({ 
             name, 
