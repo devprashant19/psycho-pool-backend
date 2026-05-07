@@ -77,6 +77,11 @@ module.exports = (io, socket) => {
   socket.on('admin_reveal_results', async () => {
     if (!isAdmin()) return;
 
+    if (state.gamePhase !== 'QUESTION_ACTIVE') {
+        console.warn(`⚠️ Attempted to reveal results during ${state.gamePhase} phase.`);
+        return;
+    }
+
     try {
         const voteCounts = {};
         Object.values(state.currentVotes).forEach(vote => {
