@@ -23,6 +23,8 @@ module.exports = (io, socket) => {
             socketId: socket.id, 
             history: [] 
         });
+        
+        socket.playerId = newPlayer.id;
 
         socket.emit("join_success", { playerId: newPlayer.id });
         
@@ -41,9 +43,14 @@ module.exports = (io, socket) => {
 
   // --- SUBMIT ANSWER ---
   socket.on('submit_answer', (data) => {
+    if (!socket.playerId) {
+      console.warn(`⚠️ Unauthenticated vote attempt from socket ${socket.id}`);
+      return;
+    }
+    
     // Voting is fast (Memory), so no queue needed here.
     if (!state.currentVotes) state.currentVotes = {};
-    state.currentVotes[data.playerId] = data.answer;
+    state.currentVotes[socket.playerId] = data.answer;
   });
 
   // --- RECONNECT ---
@@ -54,6 +61,7 @@ module.exports = (io, socket) => {
         console.log(`♻️ Player Reconnected: ${player.name}`);
         player.socketId = socket.id;
         await player.save();
+        socket.playerId = player.id;
 
         // Reconstruct current question data
         let currentQData = null;
