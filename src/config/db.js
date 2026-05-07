@@ -13,7 +13,7 @@ if (isGCP) {
   sequelize = new Sequelize(
     process.env.DB_NAME,
     process.env.DB_USER,
-    process.env.DB_PASS,
+    process.env.DB_PASSWORD,
     {
       dialect: 'postgres',
       host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
@@ -38,6 +38,12 @@ if (isGCP) {
   const dbUrl = process.env.DATABASE_URL;
   const connectionString = dbUrl || 'postgres://postgres:password@localhost:5432/quizgame';
   
+  if (dbUrl) {
+    console.log('🔗 Using DATABASE_URL for connection.');
+  } else {
+    console.log('⚠️ No DATABASE_URL found, falling back to local default.');
+  }
+
   const useSSL = !!dbUrl && !dbUrl.includes('localhost');
 
   sequelize = new Sequelize(connectionString, {
